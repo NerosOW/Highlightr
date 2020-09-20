@@ -218,10 +218,11 @@
 - (void)setupListeners
 {
 	NSTextStorage __weak *stringStorage = _stringStorage;
+	CodeAttributedString __weak *weakself = self;
 	
 	[[self highlightr] setThemeChanged:^(Theme *theme)
 	{
-		[self setNeedsHighlightInRange:NSMakeRange(0, [stringStorage length])];
+		[weakself setNeedsHighlightInRange:NSMakeRange(0, [stringStorage length])];
 	}];
 }
 
@@ -242,7 +243,8 @@
 	// Bounds check
 	range = [[self string] boundedRangeFrom:range];
 
-	if ([_highlightDelegate respondsToSelector:@selector(shouldHighlightRange:)] && ![_highlightDelegate shouldHighlightRange:range])
+	if ([_highlightDelegate respondsToSelector:@selector(shouldHighlightRange:)]
+		&& ![_highlightDelegate shouldHighlightRange:range])
 	{
 		return;
 	}
@@ -250,6 +252,7 @@
 	NSString *configuredLanguage = _language != nil ? _language : @"";
 	
 	Highlightr __weak *highlightr = _highlightr;
+	CodeAttributedString __weak *weakself = self;
 	NSTextStorage *stringStorage = [[NSTextStorage alloc] initWithAttributedString:_stringStorage];
 	NSString *string = [stringStorage string];
 
@@ -259,7 +262,7 @@
 		NSString *language = configuredLanguage;
 		BOOL usingLanguageBoundaries = NO;
 		
-		if (!highlightr || !stringStorage)
+		if (!highlightr || !stringStorage || !weakself)
 		{
 			// nil checking
 			return;
@@ -289,25 +292,25 @@
 
 				if (hintedBounds.location != NSNotFound)
 				{
-					highlightRange = [self contiguousElementRangeFor:hintedBounds];
+					highlightRange = [weakself contiguousElementRangeFor:hintedBounds];
 				}
 				else
 				{
-					highlightRange = [self contiguousElementRangeFor:[[stringStorage string] lineRangeForRange:range]];
+					highlightRange = [weakself contiguousElementRangeFor:[[stringStorage string] lineRangeForRange:range]];
 				}
 			}
 		}
 
 		if (highlightRange.length == 0 || [language isEqualToString:@""])
 		{
-			[self sendDelegateMethodDidHighlightRange:range success:YES];
+			[weakself sendDelegateMethodDidHighlightRange:range success:YES];
 			return;
 		}
 
 		// Checks if this highlighting is still valid.
 		if (NSMaxRange(highlightRange) > [string length])
 		{
-			[self sendDelegateMethodDidHighlightRange:range success:NO];
+			[weakself sendDelegateMethodDidHighlightRange:range success:NO];
 			return;
 		}
 
@@ -316,7 +319,7 @@
 
 		if (highlightedString == nil)
 		{
-			[self sendDelegateMethodDidHighlightRange:range success:NO];
+			[weakself sendDelegateMethodDidHighlightRange:range success:NO];
 			return;
 		}
 		else if (usingLanguageBoundaries && [highlightedString length] > 0
@@ -341,12 +344,18 @@
 		}
 
 		dispatch_async(dispatch_get_main_queue(), ^{
-			NSTextStorage *originalStringStorage = self->_stringStorage;
+			if (!weakself) {
+				return;
+			}
+
+			CodeAttributedString *strongself = weakself;
+
+			NSTextStorage *originalStringStorage = strongself->_stringStorage;
 
 			// Checks if this highlighting is still valid.
 			if (NSMaxRange(highlightRange) > [originalStringStorage length])
 			{
-				[self sendDelegateMethodDidHighlightRange:range success:NO];
+				[weakself sendDelegateMethodDidHighlightRange:range success:NO];
 				return;
 			}
 
@@ -356,14 +365,14 @@
 			if (originalRangeHash != highlightedRangeHash)
 			{
 				// The string has changed. Bail out.
-				[self sendDelegateMethodDidHighlightRange:range success:NO];
+				[weakself sendDelegateMethodDidHighlightRange:range success:NO];
 				return;
 			}
 
 			[originalStringStorage replaceCharactersInRange:highlightRange withAttributedString:highlightedString];
-			[self edited:NSTextStorageEditedAttributes range:highlightRange changeInLength:0];
+			[weakself edited:NSTextStorageEditedAttributes range:highlightRange changeInLength:0];
 
-			[self sendDelegateMethodDidHighlightRange:range success:YES];
+			[weakself sendDelegateMethodDidHighlightRange:range success:YES];
 		});
 	});
 }
